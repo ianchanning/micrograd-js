@@ -70,43 +70,43 @@ describe("Autograd Engine: Core Operations", () => {
     const a = eng.value(5.0, "a");
     const b = eng.value(-3.0, "b");
     const c = eng.add(a, b, "c");
-    const grads = eng.backward(c); // Capture the returned map
+    c.backward(); // Call the method on the object itself!
 
-    // Assert against the values in the map
-    expect(grads.get(c)).toBe(1.0);
-    expect(grads.get(a)).toBe(1.0);
-    expect(grads.get(b)).toBe(1.0);
+    // Assert against the mutated .grad properties
+    expect(c.grad).toBe(1.0);
+    expect(a.grad).toBe(1.0);
+    expect(b.grad).toBe(1.0);
   });
 
   test("mul: backward pass calculates correct gradients", () => {
     const a = eng.value(5.0, "a");
     const b = eng.value(-3.0, "b");
     const c = eng.mul(a, b, "c");
-    const grads = eng.backward(c); // Capture the map
+    c.backward(); // Call the method
 
-    expect(grads.get(c)).toBe(1.0);
-    expect(grads.get(a)).toBe(b.data); // Check the map value
-    expect(grads.get(b)).toBe(a.data); // Check the map value
+    expect(c.grad).toBe(1.0);
+    expect(a.grad).toBe(b.data); // Check the .grad value
+    expect(b.grad).toBe(a.data); // Check the .grad value
   });
 
   test("tanh: backward pass calculates correct gradients", () => {
     const a = eng.value(0.5, "a");
     const t = eng.tanh(a, "t");
-    const grads = eng.backward(t); // Capture the map
+    t.backward(); // Call the method
 
     const expected_grad_a = 1 - Math.tanh(0.5) ** 2;
-    expect(grads.get(t)).toBe(1.0); // d(t)/d(t)
-    expect(grads.get(a)).toBeCloseTo(expected_grad_a); // d(t)/d(a) = 1 - tanh(a.data)^2
+    expect(t.grad).toBe(1.0); // d(t)/d(t)
+    expect(a.grad).toBeCloseTo(expected_grad_a); // d(t)/d(a) = 1 - tanh(a.data)^2
   });
 
   test("pow: backward pass calculates correct gradients", () => {
     const a = eng.value(3.0, "a");
     const p = eng.pow(a, 3, "p"); // 3^3 = 27
-    const grads = eng.backward(p);
+    p.backward(); // Call the method
 
     // d(p)/d(a) = 3 * a.data^(3-1) = 3 * 3^2 = 27
-    expect(grads.get(p)).toBe(1.0);
-    expect(grads.get(a)).toBeCloseTo(27.0);
+    expect(p.grad).toBe(1.0);
+    expect(a.grad).toBeCloseTo(27.0);
   });
 
   test("complex graph: backward pass propagates correctly", () => {
@@ -125,15 +125,15 @@ describe("Autograd Engine: Core Operations", () => {
     const ca = eng.mul(c, a, "ca"); // c*a (note reuse of 'a')
     const d = eng.add(ab, ca, "d"); // ab + ca
 
-    const grads = eng.backward(d); // Capture the map
+    d.backward(); // Call the method
 
     expect(d.data).toBeCloseTo(14.0);
-    expect(grads.get(d)).toBe(1.0);
-    expect(grads.get(ab)).toBeCloseTo(1.0); // from add backward
-    expect(grads.get(ca)).toBeCloseTo(1.0); // from add backward
-    expect(grads.get(a)).toBeCloseTo(7.0); // b.data * ab.grad + c.data * ca.grad = 3*1 + 4*1 = 7
-    expect(grads.get(b)).toBeCloseTo(2.0); // a.data * ab.grad = 2*1 = 2
-    expect(grads.get(c)).toBeCloseTo(2.0); // a.data * ca.grad = 2*1 = 2
+    expect(d.grad).toBe(1.0);
+    expect(ab.grad).toBeCloseTo(1.0); // from add backward
+    expect(ca.grad).toBeCloseTo(1.0); // from add backward
+    expect(a.grad).toBeCloseTo(7.0); // b.data * ab.grad + c.data * ca.grad = 3*1 + 4*1 = 7
+    expect(b.grad).toBeCloseTo(2.0); // a.data * ab.grad = 2*1 = 2
+    expect(c.grad).toBeCloseTo(2.0); // a.data * ca.grad = 2*1 = 2
   });
 });
 
@@ -186,9 +186,9 @@ describe("Autograd Engine: Property-Based Tests", () => {
         const fresh_a = eng.value(a.data);
         const fresh_b = eng.value(b.data);
         const result = eng.add(fresh_a, fresh_b);
-        const grads = eng.backward(result); // Capture the map
+        result.backward(); // Call the state-updating method.
         // Check gradients are approximately 1.0 (scaled by result.grad which is 1.0)
-        return closeTo(grads.get(fresh_a), 1.0) && closeTo(grads.get(fresh_b), 1.0);
+        return closeTo(fresh_a.grad, 1.0) && closeTo(fresh_b.grad, 1.0);
       }),
     );
   });
@@ -199,11 +199,11 @@ describe("Autograd Engine: Property-Based Tests", () => {
         const fresh_a = eng.value(a.data);
         const fresh_b = eng.value(b.data);
         const result = eng.mul(fresh_a, fresh_b);
-        const grads = eng.backward(result); // Capture the map
+        result.backward(); // Call the method!
         // Check gradients: d(res)/da = b.data, d(res)/db = a.data
         return (
-          closeTo(grads.get(fresh_a), fresh_b.data) &&
-          closeTo(grads.get(fresh_b), fresh_a.data)
+          closeTo(fresh_a.grad, fresh_b.data) &&
+          closeTo(fresh_b.grad, fresh_a.data)
         );
       }),
     );
@@ -217,9 +217,9 @@ describe("Autograd Engine: Property-Based Tests", () => {
       fc.property(boundedValueArbitrary, (a) => {
         const fresh_a = eng.value(a.data);
         const result = eng.tanh(fresh_a);
-        const grads = eng.backward(result); // Capture the map
+        result.backward(); // Call the method!
         const expected_grad = 1.0 - result.data * result.data; // 1 - tanh(a.data)^2
-        return closeTo(grads.get(fresh_a), expected_grad);
+        return closeTo(fresh_a.grad, expected_grad);
       }),
     );
   });
@@ -252,31 +252,30 @@ describe("Autograd Engine: Property-Based Tests", () => {
 describe("Autograd Engine: Composition with Pipe", () => {
   test("pipe should produce the same result as manual composition", () => {
     // We want to compute: tanh((input^2 + 5)^3)
-    const input = eng.value(0.5, "input");
     const five = eng.value(5.0, "five"); // A constant
 
     // --- Manual, nested composition ---
-    const a_manual = eng.pow(input, 2, "a_man");
+    // Use a separate input to avoid grad contamination!
+    const input_manual = eng.value(0.5, "input_manual");
+    const a_manual = eng.pow(input_manual, 2, "a_man");
     const b_manual = eng.add(a_manual, five, "b_man");
     const c_manual = eng.pow(b_manual, 3, "c_man");
     const d_manual = eng.tanh(c_manual, "d_man");
-    const grads_manual = eng.backward(d_manual);
+    d_manual.backward();
 
     // --- Elegant, piped composition ---
+    const input_piped = eng.value(0.5, "input_piped");
     const d_piped = eng.pipe(
       (v) => eng.pow(v, 2, "a_pipe"),
       (v) => eng.add(v, five, "b_pipe"),
       (v) => eng.pow(v, 3, "c_pipe"),
       (v) => eng.tanh(v, "d_pipe"),
-    )(input);
-    const grads_piped = eng.backward(d_piped);
+    )(input_piped);
+    d_piped.backward();
 
     // --- Assertions of Equivalence ---
-    // 1. Check that the final data is the same
     expect(d_manual.data).toBeCloseTo(d_piped.data);
-
-    // 2. Check that the gradient of the original input is the same
-    expect(grads_manual.get(input)).toBeCloseTo(grads_piped.get(input));
+    expect(input_manual.grad).toBeCloseTo(input_piped.grad); // Compare the grads of the two separate inputs
 
     // Optional: A quick sanity check of the value
     const expected_data = Math.tanh((0.5 ** 2 + 5) ** 3);

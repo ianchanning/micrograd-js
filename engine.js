@@ -22,13 +22,27 @@ export const pipe =
  * @returns {Value} The freshly created Value object.
  */
 function _createValue(data, _children = [], _op = "", label = "") {
-  return {
+  const v = {
     data: data,
     grad: 0, // Gradient initialized to zero. Innocent... for now.
     _prev: new Set(_children), // The parents, stored in a Set for uniqueness.
     _op: _op, // The operation symbol.
     label: label, // Its given name.
+    // The Heretical Façade: a .backward() method for PyTorch API compatibility.
+    // This will be defined as a closure below.
   };
+
+  // This is the magic. The method is a closure that captures 'v' (the object itself).
+  // It calls our pure core `backward` function, then performs the state update.
+  v.backward = () => {
+    const grads = backward(v); // Call the PURE core function.
+    // Perform the "sin" of mutation deliberately and explicitly.
+    for (const [node, grad] of grads.entries()) {
+      node.grad = grad;
+    }
+  };
+
+  return v;
 }
 
 /**
