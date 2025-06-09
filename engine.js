@@ -99,36 +99,67 @@ export function tanh(v, label = "") {
 
 /**
  * Performs the backward pass (backpropagation) starting from a root node.
- * This calculates the gradients for all nodes in the computation graph
- * leading to the root. It's where the learning happens!
+ * This is a PURE function. It takes a root node and returns a Map of
+ * gradients, leaving the original graph untouched.
  *
- * @param {Value} root - The final Value object in the computation graph. The 'output'.
+ * @param {Value} root - The final Value object in the computation graph.
+ * @returns {Map<Value, number>} A map from each node in the graph to its gradient.
  */
 export function backward(root) {
   // Topological sort: Ensures we process nodes only after their dependents.
-  // Crucial for correct gradient accumulation.
   const topo = [];
   const visited = new Set();
   function buildTopo(v) {
     if (v && !visited.has(v)) {
-      // Check if v is valid before accessing properties
       visited.add(v);
       v._prev.forEach((child) => buildTopo(child));
       topo.push(v);
     }
   }
+
+  if (!root) {
+    console.error("Backward pass initiated on invalid root node.");
+    return new Map();
+  }
   buildTopo(root);
 
-  // Initialize the gradient of the final output node to 1.
-  // This signifies d(root)/d(root) = 1. The start of the chain rule.
-  if (root && typeof root.grad !== "undefined") {
-    // Check root is valid
-    root.grad = 1.0;
-  } else {
-    console.error("Backward pass initiated on invalid root node:", root);
-    return; // Stop if root is invalid
+  // This map will store the gradients. No more mutating the Value objects!
+  const grads = new Map();
+  // Initialize all gradients to 0.
+  visited.forEach((node) => grads.set(node, 0));
+  // The gradient of the final output node with respect to itself is 1.
+  grads.set(root, 1.0);
+
+  // Iterate backwards through the sorted list to compute gradients.
+  for (const node of topo.reverse()) {
+    const nodeGrad = grads.get(node) || 0;
+
+    // The new, centralized backprop logic!
+    switch (node._op) {
+      case "+": {
+        const [v1, v2] = [...node._prev];
+        grads.set(v1, grads.get(v1) + nodeGrad);
+        grads.set(v2, grads.get(v2) + nodeGrad);
+        break;
+      }
+      case "*": {
+        const [v1, v2] = [...node._prev];
+        grads.set(v1, grads.get(v1) + v2.data * nodeGrad);
+        grads.set(v2, grads.get(v2) + v1.data * nodeGrad);
+        break;
+      }
+      case "tanh": {
+        const [v] = [...node._prev];
+        // The gradient can be calculated from the output value: 1 - out.data^2
+        const tanhGrad = 1 - node.data * node.data;
+        grads.set(v, grads.get(v) + tanhGrad * nodeGrad);
+        break;
+      }
+      // Default case handles leaf nodes (op=''), which have no children to pass grad to.
+      default:
+        break;
+    }
   }
 
-  // Iterate backwards through the sorted list and call _backward for each node.
-  // This section is now empty, awaiting the immutable gradient calculation logic.
+  return grads;
 }

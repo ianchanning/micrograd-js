@@ -62,32 +62,33 @@ describe("Autograd Engine: Core Operations", () => {
     const a = eng.value(5.0, "a");
     const b = eng.value(-3.0, "b");
     const c = eng.add(a, b, "c");
-    eng.backward(c);
+    const grads = eng.backward(c); // Capture the returned map
 
-    expect(c.grad).toBe(1.0); // d(c)/d(c)
-    expect(a.grad).toBe(1.0); // d(c)/d(a) = 1
-    expect(b.grad).toBe(1.0); // d(c)/d(b) = 1
+    // Assert against the values in the map
+    expect(grads.get(c)).toBe(1.0);
+    expect(grads.get(a)).toBe(1.0);
+    expect(grads.get(b)).toBe(1.0);
   });
 
   test("mul: backward pass calculates correct gradients", () => {
     const a = eng.value(5.0, "a");
     const b = eng.value(-3.0, "b");
     const c = eng.mul(a, b, "c");
-    eng.backward(c);
+    const grads = eng.backward(c); // Capture the map
 
-    expect(c.grad).toBe(1.0); // d(c)/d(c)
-    expect(a.grad).toBe(b.data); // d(c)/d(a) = b.data = -3.0
-    expect(b.grad).toBe(a.data); // d(c)/d(b) = a.data = 5.0
+    expect(grads.get(c)).toBe(1.0);
+    expect(grads.get(a)).toBe(b.data); // Check the map value
+    expect(grads.get(b)).toBe(a.data); // Check the map value
   });
 
   test("tanh: backward pass calculates correct gradients", () => {
     const a = eng.value(0.5, "a");
     const t = eng.tanh(a, "t");
-    eng.backward(t);
+    const grads = eng.backward(t); // Capture the map
 
     const expected_grad_a = 1 - Math.tanh(0.5) ** 2;
-    expect(t.grad).toBe(1.0); // d(t)/d(t)
-    expect(a.grad).toBeCloseTo(expected_grad_a); // d(t)/d(a) = 1 - tanh(a.data)^2
+    expect(grads.get(t)).toBe(1.0); // d(t)/d(t)
+    expect(grads.get(a)).toBeCloseTo(expected_grad_a); // d(t)/d(a) = 1 - tanh(a.data)^2
   });
 
   test("complex graph: backward pass propagates correctly", () => {
@@ -106,15 +107,15 @@ describe("Autograd Engine: Core Operations", () => {
     const ca = eng.mul(c, a, "ca"); // c*a (note reuse of 'a')
     const d = eng.add(ab, ca, "d"); // ab + ca
 
-    eng.backward(d);
+    const grads = eng.backward(d); // Capture the map
 
     expect(d.data).toBeCloseTo(14.0);
-    expect(d.grad).toBe(1.0);
-    expect(ab.grad).toBeCloseTo(1.0); // from add backward
-    expect(ca.grad).toBeCloseTo(1.0); // from add backward
-    expect(a.grad).toBeCloseTo(7.0); // b.data * ab.grad + c.data * ca.grad = 3*1 + 4*1 = 7
-    expect(b.grad).toBeCloseTo(2.0); // a.data * ab.grad = 2*1 = 2
-    expect(c.grad).toBeCloseTo(2.0); // a.data * ca.grad = 2*1 = 2
+    expect(grads.get(d)).toBe(1.0);
+    expect(grads.get(ab)).toBeCloseTo(1.0); // from add backward
+    expect(grads.get(ca)).toBeCloseTo(1.0); // from add backward
+    expect(grads.get(a)).toBeCloseTo(7.0); // b.data * ab.grad + c.data * ca.grad = 3*1 + 4*1 = 7
+    expect(grads.get(b)).toBeCloseTo(2.0); // a.data * ab.grad = 2*1 = 2
+    expect(grads.get(c)).toBeCloseTo(2.0); // a.data * ca.grad = 2*1 = 2
   });
 });
 
@@ -167,9 +168,9 @@ describe("Autograd Engine: Property-Based Tests", () => {
         const fresh_a = eng.value(a.data);
         const fresh_b = eng.value(b.data);
         const result = eng.add(fresh_a, fresh_b);
-        eng.backward(result);
+        const grads = eng.backward(result); // Capture the map
         // Check gradients are approximately 1.0 (scaled by result.grad which is 1.0)
-        return closeTo(fresh_a.grad, 1.0) && closeTo(fresh_b.grad, 1.0);
+        return closeTo(grads.get(fresh_a), 1.0) && closeTo(grads.get(fresh_b), 1.0);
       }),
     );
   });
@@ -180,11 +181,11 @@ describe("Autograd Engine: Property-Based Tests", () => {
         const fresh_a = eng.value(a.data);
         const fresh_b = eng.value(b.data);
         const result = eng.mul(fresh_a, fresh_b);
-        eng.backward(result);
+        const grads = eng.backward(result); // Capture the map
         // Check gradients: d(res)/da = b.data, d(res)/db = a.data
         return (
-          closeTo(fresh_a.grad, fresh_b.data) &&
-          closeTo(fresh_b.grad, fresh_a.data)
+          closeTo(grads.get(fresh_a), fresh_b.data) &&
+          closeTo(grads.get(fresh_b), fresh_a.data)
         );
       }),
     );
@@ -198,9 +199,9 @@ describe("Autograd Engine: Property-Based Tests", () => {
       fc.property(boundedValueArbitrary, (a) => {
         const fresh_a = eng.value(a.data);
         const result = eng.tanh(fresh_a);
-        eng.backward(result);
+        const grads = eng.backward(result); // Capture the map
         const expected_grad = 1.0 - result.data * result.data; // 1 - tanh(a.data)^2
-        return closeTo(fresh_a.grad, expected_grad);
+        return closeTo(grads.get(fresh_a), expected_grad);
       }),
     );
   });
