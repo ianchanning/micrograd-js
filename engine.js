@@ -138,6 +138,30 @@ export function pow(v, exponent, label = "") {
 }
 
 /**
+ * Performs a depth-first search to build a topological order of the computation graph.
+ * This is a helper for the backward pass, encapsulating the mutable state for efficiency.
+ *
+ * @param {Value} root - The starting node for the traversal.
+ * @returns {{topo: Value[], visited: Set<Value>}} An object containing the topologically sorted nodes and all visited nodes.
+ */
+function getTopologicalOrder(root) {
+  const topo = [];
+  const visited = new Set();
+
+  // Inner recursive helper function for DFS
+  function dfs(v) {
+    if (v && !visited.has(v)) {
+      visited.add(v);
+      v._prev.forEach((child) => dfs(child));
+      topo.push(v);
+    }
+  }
+
+  dfs(root);
+  return { topo, visited };
+}
+
+/**
  * Performs the backward pass (backpropagation) starting from a root node.
  * This is a PURE function. It takes a root node and returns a Map of
  * gradients, leaving the original graph untouched.
@@ -146,22 +170,13 @@ export function pow(v, exponent, label = "") {
  * @returns {Map<Value, number>} A map from each node in the graph to its gradient.
  */
 export function backward(root) {
-  // Topological sort: Ensures we process nodes only after their dependents.
-  const topo = [];
-  const visited = new Set();
-  function buildTopo(v) {
-    if (v && !visited.has(v)) {
-      visited.add(v);
-      v._prev.forEach((child) => buildTopo(child));
-      topo.push(v);
-    }
-  }
-
   if (!root) {
     console.error("Backward pass initiated on invalid root node.");
     return new Map();
   }
-  buildTopo(root);
+
+  // Obtain the topological order and visited nodes from our dedicated helper.
+  const { topo, visited } = getTopologicalOrder(root);
 
   // This map will store the gradients. No more mutating the Value objects!
   const grads = new Map();
