@@ -5,7 +5,10 @@
  * @param  {...function} fns - A sequence of functions.
  * @returns {function} A new function that applies the sequence.
  */
-export const pipe = (...fns) => (x) => fns.reduce((v, f) => f(v), x);
+export const pipe =
+  (...fns) =>
+  (x) =>
+    fns.reduce((v, f) => f(v), x);
 
 /**
  * Creates a Value object, the fundamental unit of our computation graph.
