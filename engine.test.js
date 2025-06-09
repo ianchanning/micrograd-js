@@ -56,6 +56,14 @@ describe("Autograd Engine: Core Operations", () => {
     expect([...t._prev]).toEqual([a]);
   });
 
+  test("pow: forward pass works", () => {
+    const a = eng.value(3.0);
+    const p = eng.pow(a, 2, "p"); // 3^2
+    expect(p.data).toBeCloseTo(9.0);
+    expect(p._op).toBe("^2");
+    expect([...p._prev]).toEqual([a]);
+  });
+
   // --- Specific Gradient Tests ---
 
   test("add: backward pass calculates correct gradients", () => {
@@ -89,6 +97,16 @@ describe("Autograd Engine: Core Operations", () => {
     const expected_grad_a = 1 - Math.tanh(0.5) ** 2;
     expect(grads.get(t)).toBe(1.0); // d(t)/d(t)
     expect(grads.get(a)).toBeCloseTo(expected_grad_a); // d(t)/d(a) = 1 - tanh(a.data)^2
+  });
+
+  test("pow: backward pass calculates correct gradients", () => {
+    const a = eng.value(3.0, "a");
+    const p = eng.pow(a, 3, "p"); // 3^3 = 27
+    const grads = eng.backward(p);
+
+    // d(p)/d(a) = 3 * a.data^(3-1) = 3 * 3^2 = 27
+    expect(grads.get(p)).toBe(1.0);
+    expect(grads.get(a)).toBeCloseTo(27.0);
   });
 
   test("complex graph: backward pass propagates correctly", () => {
@@ -229,4 +247,39 @@ describe("Autograd Engine: Property-Based Tests", () => {
   // Note: Testing gradient commutativity/associativity requires careful graph setup
   // and potentially resetting grads mid-property, which complicates things.
   // Focusing on data properties for these is often sufficient for basic checks.
+});
+
+describe("Autograd Engine: Composition with Pipe", () => {
+  test("pipe should produce the same result as manual composition", () => {
+    // We want to compute: tanh((input^2 + 5)^3)
+    const input = eng.value(0.5, "input");
+    const five = eng.value(5.0, "five"); // A constant
+
+    // --- Manual, nested composition ---
+    const a_manual = eng.pow(input, 2, "a_man");
+    const b_manual = eng.add(a_manual, five, "b_man");
+    const c_manual = eng.pow(b_manual, 3, "c_man");
+    const d_manual = eng.tanh(c_manual, "d_man");
+    const grads_manual = eng.backward(d_manual);
+
+    // --- Elegant, piped composition ---
+    const d_piped = eng.pipe(
+      (v) => eng.pow(v, 2, "a_pipe"),
+      (v) => eng.add(v, five, "b_pipe"),
+      (v) => eng.pow(v, 3, "c_pipe"),
+      (v) => eng.tanh(v, "d_pipe"),
+    )(input);
+    const grads_piped = eng.backward(d_piped);
+
+    // --- Assertions of Equivalence ---
+    // 1. Check that the final data is the same
+    expect(d_manual.data).toBeCloseTo(d_piped.data);
+
+    // 2. Check that the gradient of the original input is the same
+    expect(grads_manual.get(input)).toBeCloseTo(grads_piped.get(input));
+
+    // Optional: A quick sanity check of the value
+    const expected_data = Math.tanh((0.5 ** 2 + 5) ** 3);
+    expect(d_manual.data).toBeCloseTo(expected_data);
+  });
 });

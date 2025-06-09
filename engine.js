@@ -1,6 +1,13 @@
 // engine.js - The liberated core of our tiny gradient beast!
 
 /**
+ * Our glorious pipe function, for composing operations in a readable, left-to-right flow.
+ * @param  {...function} fns - A sequence of functions.
+ * @returns {function} A new function that applies the sequence.
+ */
+export const pipe = (...fns) => (x) => fns.reduce((v, f) => f(v), x);
+
+/**
  * Creates a Value object, the fundamental unit of our computation graph.
  * It's like a neuron, but simpler... and potentially more dangerous.
  * Private function, mostly. The outside world interacts via operations.
@@ -98,6 +105,22 @@ export function tanh(v, label = "") {
 }
 
 /**
+ * Raises a Value object to a power. For expressions that need a little... emphasis.
+ *
+ * @param {Value} v - The base Value.
+ * @param {number} exponent - The exponent to raise the value to.
+ * @param {string} [label=''] - Optional label.
+ * @returns {Value} A new Value object representing v^exponent.
+ */
+export function pow(v, exponent, label = "") {
+  if (!(v && typeof v.data === "number")) {
+    throw new Error("Invalid input for pow: Input must be a Value object.");
+  }
+  const out = _createValue(v.data ** exponent, [v], `^${exponent}`, label);
+  return out;
+}
+
+/**
  * Performs the backward pass (backpropagation) starting from a root node.
  * This is a PURE function. It takes a root node and returns a Map of
  * gradients, leaving the original graph untouched.
@@ -153,6 +176,13 @@ export function backward(root) {
         // The gradient can be calculated from the output value: 1 - out.data^2
         const tanhGrad = 1 - node.data * node.data;
         grads.set(v, grads.get(v) + tanhGrad * nodeGrad);
+        break;
+      }
+      case (node._op.startsWith("^") ? node._op : ""): {
+        const [v] = [...node._prev];
+        const exponent = Number(node._op.slice(1));
+        const powGrad = exponent * v.data ** (exponent - 1);
+        grads.set(v, grads.get(v) + powGrad * nodeGrad);
         break;
       }
       // Default case handles leaf nodes (op=''), which have no children to pass grad to.
