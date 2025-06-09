@@ -157,38 +157,28 @@ export function backward(root) {
   for (const node of topo.reverse()) {
     const nodeGrad = grads.get(node) || 0;
 
-    // The new, centralized backprop logic!
-    switch (node._op) {
-      case "+": {
-        const [v1, v2] = [...node._prev];
-        grads.set(v1, grads.get(v1) + nodeGrad);
-        grads.set(v2, grads.get(v2) + nodeGrad);
-        break;
-      }
-      case "*": {
-        const [v1, v2] = [...node._prev];
-        grads.set(v1, grads.get(v1) + v2.data * nodeGrad);
-        grads.set(v2, grads.get(v2) + v1.data * nodeGrad);
-        break;
-      }
-      case "tanh": {
-        const [v] = [...node._prev];
-        // The gradient can be calculated from the output value: 1 - out.data^2
-        const tanhGrad = 1 - node.data * node.data;
-        grads.set(v, grads.get(v) + tanhGrad * nodeGrad);
-        break;
-      }
-      case (node._op.startsWith("^") ? node._op : ""): {
-        const [v] = [...node._prev];
-        const exponent = Number(node._op.slice(1));
-        const powGrad = exponent * v.data ** (exponent - 1);
-        grads.set(v, grads.get(v) + powGrad * nodeGrad);
-        break;
-      }
-      // Default case handles leaf nodes (op=''), which have no children to pass grad to.
-      default:
-        break;
+    // The corrected, centralized backprop logic, using a robust if/else if chain.
+    const op = node._op;
+    if (op === "+") {
+      const [v1, v2] = [...node._prev];
+      grads.set(v1, grads.get(v1) + nodeGrad);
+      grads.set(v2, grads.get(v2) + nodeGrad);
+    } else if (op === "*") {
+      const [v1, v2] = [...node._prev];
+      grads.set(v1, grads.get(v1) + v2.data * nodeGrad);
+      grads.set(v2, grads.get(v2) + v1.data * nodeGrad);
+    } else if (op === "tanh") {
+      const [v] = [...node._prev];
+      // The gradient can be calculated from the output value: 1 - out.data^2
+      const tanhGrad = 1 - node.data * node.data;
+      grads.set(v, grads.get(v) + tanhGrad * nodeGrad);
+    } else if (op.startsWith("^")) {
+      const [v] = [...node._prev];
+      const exponent = Number(op.slice(1));
+      const powGrad = exponent * v.data ** (exponent - 1);
+      grads.set(v, grads.get(v) + powGrad * nodeGrad);
     }
+    // Leaf nodes where op === "" are now correctly and implicitly ignored.
   }
 
   return grads;
