@@ -148,14 +148,14 @@ function getTopologicalOrder(root) {
   const topo = [];
   const visited = new Set();
 
-  // Inner recursive helper function for DFS
-  function dfs(v) {
-    if (v && !visited.has(v)) {
-      visited.add(v);
-      v._prev.forEach((child) => dfs(child));
-      topo.push(v);
+  const dfs = (v) => {
+    if (!v || visited.has(v)) {
+      return;
     }
-  }
+    visited.add(v);
+    v._prev.forEach(dfs);
+    topo.push(v);
+  };
 
   dfs(root);
   return { topo, visited };
