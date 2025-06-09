@@ -15,7 +15,6 @@ function _createValue(data, _children = [], _op = "", label = "") {
   return {
     data: data,
     grad: 0, // Gradient initialized to zero. Innocent... for now.
-    _backward: () => {}, // Default backprop: do nothing (for input nodes).
     _prev: new Set(_children), // The parents, stored in a Set for uniqueness.
     _op: _op, // The operation symbol.
     label: label, // Its given name.
@@ -54,14 +53,6 @@ export function add(v1, v2, label = "") {
   }
   const out = _createValue(v1.data + v2.data, [v1, v2], "+", label);
 
-  // The backward pass for addition: gradient flows equally.
-  out._backward = () => {
-    // The gradient of the output flows back to the inputs.
-    // += is CRUCIAL for DAGs where a node is used multiple times.
-    v1.grad += out.grad; // dL/dv1 = dL/dout * dout/dv1 = out.grad * 1
-    v2.grad += out.grad; // dL/dv2 = dL/dout * dout/dv2 = out.grad * 1
-  };
-
   return out;
 }
 
@@ -85,13 +76,6 @@ export function mul(v1, v2, label = "") {
   }
   const out = _createValue(v1.data * v2.data, [v1, v2], "*", label);
 
-  // Backward pass for multiplication: the chain rule in action.
-  out._backward = () => {
-    // Each input's gradient gets the output gradient scaled by the *other* input's value.
-    v1.grad += v2.data * out.grad; // dL/dv1 = dL/dout * dout/dv1 = out.grad * v2.data
-    v2.grad += v1.data * out.grad; // dL/dv2 = dL/dout * dout/dv2 = out.grad * v1.data
-  };
-
   return out;
 }
 
@@ -110,11 +94,6 @@ export function tanh(v, label = "") {
   const t = Math.tanh(v.data);
   const out = _createValue(t, [v], "tanh", label);
 
-  // Backward pass for tanh: uses the output value itself! 1 - tanh(x)^2
-  out._backward = () => {
-    // dL/dv = dL/dout * dout/dv = out.grad * (1 - tanh(v.data)^2) = out.grad * (1 - out.data^2)
-    v.grad += (1 - t * t) * out.grad;
-  };
   return out;
 }
 
@@ -151,11 +130,5 @@ export function backward(root) {
   }
 
   // Iterate backwards through the sorted list and call _backward for each node.
-  topo.reverse().forEach((node) => {
-    // Belt-and-suspenders: ensure the function exists before calling.
-    if (node && typeof node._backward === "function") {
-      node._backward();
-    }
-    // No need for an else; leaf nodes have a no-op _backward by default.
-  });
+  // This section is now empty, awaiting the immutable gradient calculation logic.
 }
