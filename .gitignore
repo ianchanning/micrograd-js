@@ -8,3 +8,5 @@ yarn.lock
 tutorial.js
 
 .aider*
+# We ignore this as its not relevant for a public project
+CONVENTIONS.md
