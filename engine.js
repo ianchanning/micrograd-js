@@ -187,28 +187,29 @@ export function backward(root) {
 
   // Iterate backwards through the sorted list to compute gradients.
   for (const node of topo.reverse()) {
-    const nodeGrad = grads.get(node) || 0;
+    const d = grads.get;
+    const dn = d(node) || 0;
+    const { _op: op, _prev: prev, data } = node;
 
     // The corrected, centralized backprop logic, using a robust if/else if chain.
-    const op = node._op;
     if (op === "+") {
-      const [v1, v2] = [...node._prev];
-      grads.set(v1, grads.get(v1) + nodeGrad);
-      grads.set(v2, grads.get(v2) + nodeGrad);
+      const [v1, v2] = prev;
+      grads.set(v1, d(v1) + dn);
+      grads.set(v2, d(v2) + dn);
     } else if (op === "*") {
-      const [v1, v2] = [...node._prev];
-      grads.set(v1, grads.get(v1) + v2.data * nodeGrad);
-      grads.set(v2, grads.get(v2) + v1.data * nodeGrad);
+      const [v1, v2] = prev;
+      grads.set(v1, d(v1) + v2.data * dn);
+      grads.set(v2, d(v2) + v1.data * dn);
     } else if (op === "tanh") {
-      const [v] = [...node._prev];
+      const [v1] = prev;
       // The gradient can be calculated from the output value: 1 - out.data^2
-      const tanhGrad = 1 - node.data * node.data;
-      grads.set(v, grads.get(v) + tanhGrad * nodeGrad);
+      const grad = 1 - data ** 2;
+      grads.set(v1, d(v1) + grad * dn);
     } else if (op.startsWith("^")) {
-      const [v] = [...node._prev];
-      const exponent = Number(op.slice(1));
-      const powGrad = exponent * v.data ** (exponent - 1);
-      grads.set(v, grads.get(v) + powGrad * nodeGrad);
+      const [v1] = prev;
+      const exp = Number(op.slice(1));
+      const grad = exp * v1.data ** (exp - 1);
+      grads.set(v1, d(v1) + grad * dn);
     }
     // Leaf nodes where op === "" are now correctly and implicitly ignored.
   }
