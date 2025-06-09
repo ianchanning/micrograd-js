@@ -1,3 +1,4 @@
+/*global Viz*/
 /**
  * WIP: This is an experiment to see if I can recreate karpathy's micrograd
  * {@link https://www.youtube.com/watch?v=VMj-3S1tku0}
